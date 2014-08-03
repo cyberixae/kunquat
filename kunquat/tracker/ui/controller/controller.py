@@ -21,6 +21,7 @@ import tempfile
 import StringIO
 import os.path
 
+from kunquat.tracker.ui.model.trigger import Trigger
 import kunquat.tracker.cmdline as cmdline
 from kunquat.tracker.ui.model.triggerposition import TriggerPosition
 import kunquat.tracker.ui.model.tstamp as tstamp
@@ -218,6 +219,20 @@ class Controller():
     def set_rest(self, channel_number):
         note_off_event = (EVENT_NOTE_OFF, None)
         self._audio_engine.fire_event(channel_number, note_off_event)
+
+        playback_manager = self._ui_model.get_playback_manager()
+        if playback_manager.is_recording():
+            selection = self._ui_model.get_selection()
+            sheet_manager = self._ui_model.get_sheet_manager()
+            current_location = selection.get_location()
+            track = current_location.get_track()
+            system = current_location.get_system()
+            col_num = channel_number
+            row_ts = current_location.get_row_ts()
+            trigger_index = current_location.get_trigger_index()
+            target_location = TriggerPosition(track, system, col_num, row_ts, 0)
+            trigger = Trigger('n-', None)
+            sheet_manager.add_trigger(trigger, target_location)
 
     def update_output_speed(self, fps):
         self._session.set_output_speed(fps)
