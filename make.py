@@ -207,6 +207,9 @@ def build():
         build_libkunquat(builder, options, cc)
         if options.enable_tests:
             test_libkunquat(builder, options, test_cc)
+            os.environ['LD_LIBRARY_PATH'] = 'build/src/lib'
+            fabricate.run('python3', '-m', 'unittest', 'discover', '-v')
+            del os.environ['LD_LIBRARY_PATH']
 
     if options.enable_examples:
         build_examples(builder)
