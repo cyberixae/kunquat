@@ -63,11 +63,11 @@ class Toolbar(QWidget, Updater):
                 self._copy_button,
                 self._paste_button,
                 self._convert_tr_button,
-                *self._zoom_buttons,
                 self._grid_toggle,
                 self._grid_editor_button,
                 self._grid_selector,
-                self._length_editor)
+                self._length_editor,
+                *self._zoom_buttons)
 
         h = QHBoxLayout()
         h.setContentsMargins(4, 0, 4, 4)
