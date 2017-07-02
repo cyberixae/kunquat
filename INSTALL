@@ -11,15 +11,19 @@ export PYTHONPATH=`python3 -c "import os, sys; print(os.path.expanduser('~/kunqu
 NOTE: Kunquat is in an early development stage. Don't expect it to do anything useful.
 
 
-On MacOS Sierra you should be able to install and use Kunquat command line tools by doing the following:
+On MacOS Sierra you should be able to install and try out Kunquat by doing the following:
 
-brew install wget python3 libsndfile wavpack pkg-config check pulseaudio
+brew tap cartr/qt4
+brew tap-pin cartr/qt4
+brew install wget pyenv libsndfile wavpack pkg-config check pulseaudio qt@4 cmake
+pyenv install 3.4.3
+eval "$(pyenv init -)"
+pyenv shell 3.4.3
+pip3 install pyside
 ./get_build_support.sh
 ./make.py --disable-threads --disable-tests
 ./make.py --disable-threads --disable-tests --prefix=~/kunquat install
 export LD_LIBRARY_PATH=~/kunquat/lib
-export PYTHONPATH=`python3 -c "import os, sys; print(os.path.expanduser('~/kunquat/lib/python{0}.{1}/site-packages'.format(*sys.version_info)))"`
-~/kunquat/bin/kunquat-player
-~/kunquat/bin/kunquat-export
-
-You could also perhaps get the tracker running if you managed to get PySide working.
+export PYTHONPATH=~/kunquat/lib/python3.4/site-packages
+~/kunquat/bin/kunquat-tracker
+~/kunquat/bin/kunquat-player ~/kunquat/share/doc/kunquat/examples/example.kqt
