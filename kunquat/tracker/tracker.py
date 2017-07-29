@@ -14,6 +14,7 @@
 
 import os
 import signal
+import multiprocessing
 
 from . import cmdline
 from . import config
@@ -28,6 +29,7 @@ class Tracker():
         pass
 
     def main(self):
+
         config.try_load()
 
         cmdline.parse_arguments()
@@ -56,6 +58,7 @@ def main():
     t.main()
 
 if __name__ == '__main__':
+    multiprocessing.set_start_method('spawn')
     main()
 
 
