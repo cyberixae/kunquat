@@ -36,7 +36,7 @@ def test_libkunquat(builder, options, cc):
     for d in include_dirs:
         cc.add_include_dir(d)
 
-    libkunquat_dir = os.path.join(build_dir, 'lib')
+    libkunquat_dir = os.path.abspath(os.path.join(build_dir, 'lib'))
     cc.add_lib_dir(libkunquat_dir)
     cc.add_lib('kunquat')
 
@@ -47,6 +47,10 @@ def test_libkunquat(builder, options, cc):
 
     # Allow simpler structure in tests
     cc.add_compile_flag('-Wno-missing-prototypes')
+
+    # Test
+    cc.add_compile_flag('-Wno-reserved-id-macro')
+    cc.add_compile_flag('-Wno-gnu-zero-variadic-macro-arguments')
 
     if cc.get_name() == 'Clang':
         # Check marks the test index variable _i as unused
