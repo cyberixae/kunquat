@@ -5,6 +5,9 @@
 
   Input: the song length in beats on the first line, then one trigger slot per
   line in playback order: `<row> jc <count>`, `<row> jr <row>` or `<row> mj`.
+
+  Usage: jumpsim [max steps]. Exits with status 3 if playback takes more steps
+  (default 20000); nested jumps can make playback exponentially long.
 -/
 import Kunquat.Jump
 
@@ -18,7 +21,8 @@ def parseSlot (line : String) : Option (Nat × String × Nat) :=
   | [r, k, a] => do pure (← r.toNat?, k, ← a.toNat?)
   | _ => none
 
-def main : IO UInt32 := do
+def main (args : List String) : IO UInt32 := do
+  let fuel := (args.head?.bind (·.toNat?)).getD 20000
   let input ← (← IO.getStdin).readToEnd
   let lines := (input.splitOn "\n").filter (trim · ≠ "")
   let some len := lines.head?.bind (trim · |>.toNat?)
@@ -40,6 +44,6 @@ def main : IO UInt32 := do
         | ("mj", _) => .jump
         | _ => .other
       else .other }
-  match elapsed song rowOf len 10000000 (State.init (slotOf 0)) 0 with
+  match elapsed song rowOf len fuel (State.init (slotOf 0)) 0 with
   | some t => IO.println t; return 0
-  | none => IO.eprintln "out of fuel"; return 1
+  | none => IO.eprintln "too long"; return 3

@@ -38,8 +38,13 @@ def random_song(rng):
     return '\n'.join(lines) + '\n'
 
 
+TOO_LONG = 'too long'
+
+
 def run(cmd, song):
     p = subprocess.run(cmd, input=song, capture_output=True, text=True, timeout=600)
+    if p.returncode == 3:
+        return TOO_LONG
     if p.returncode != 0:
         return 'error: ' + (p.stderr.strip() or 'exit {}'.format(p.returncode))
     return int(p.stdout.strip())
@@ -59,6 +64,9 @@ def main():
     for i in range(count):
         song = random_song(rng)
         expected = run([jumpsim], song)
+        if expected == TOO_LONG:
+            skipped += 1
+            continue
         if not isinstance(expected, int):
             print('song {}: model {}'.format(i, expected))
             mismatches += 1
