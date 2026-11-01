@@ -841,6 +841,59 @@ START_TEST(Jump_backwards_creates_a_loop)
 END_TEST
 
 
+static const long jump_chunk_sizes[] = { 1, 2, 3, 4, 5, 8, 16 };
+
+
+START_TEST(Jump_context_in_next_pattern_instance_is_found)
+{
+    // A jump context left at the start of a pattern instance must be found
+    // when playback enters that pattern instance again, wherever the render
+    // chunks start and end.
+    set_audio_rate(mixing_rates[MIXING_RATE_LOW]);
+
+    set_data("album/p_manifest.json", "[0, {}]");
+    set_data("album/p_tracks.json", "[0, [0]]");
+    set_data("song_00/p_manifest.json", "[0, {}]");
+    set_data("song_00/p_order_list.json", "[0, [ [0, 0], [1, 0] ]]");
+    set_data("pat_000/p_manifest.json", "[0, {}]");
+    set_data("pat_000/p_length.json", "[0, [1, 0]]");
+    set_data("pat_000/instance_000/p_manifest.json", "[0, {}]");
+    set_data("pat_001/p_manifest.json", "[0, {}]");
+    set_data("pat_001/p_length.json", "[0, [1, 0]]");
+    set_data("pat_001/instance_000/p_manifest.json", "[0, {}]");
+    set_data("pat_001/col_00/p_triggers.json",
+            "[0,"
+            "[ [[0, 0], [\"m.jc\", \"1\"]],"
+            "  [[0, 0], [\"m.jp\", \"pat(0, 0)\"]],"
+            "  [[0, 0], [\"mj\", null]] ]"
+            "]");
+
+    validate();
+
+    // Expect pattern instance 0, a jump back at the start of 1, then 0 and 1
+    const long beat_len = mixing_rates[MIXING_RATE_LOW] / 2;
+    const long expected_len = beat_len * 3;
+
+    const long chunk_size = jump_chunk_sizes[_i];
+    long total = 0;
+    for (int calls = 0;
+            calls < 1000 && !kqt_Handle_has_stopped(handle) && total <= expected_len;
+            ++calls)
+    {
+        float chunk[16] = { 0.0f };
+        total += mix_and_fill(chunk, chunk_size);
+    }
+
+    ck_assert_msg(kqt_Handle_has_stopped(handle),
+            "Playback did not stop"
+            KT_VALUES("%ld", expected_len, total));
+    ck_assert_msg(total == expected_len,
+            "Wrong playback length with chunk size %ld: expected %ld, actual %ld",
+            chunk_size, expected_len, total);
+}
+END_TEST
+
+
 START_TEST(Events_appear_in_event_buffer)
 {
     setup_debug_instrument();
@@ -1445,6 +1498,9 @@ static Suite* Player_suite(void)
     tcase_add_loop_test(
             tc_events, Jump_backwards_creates_a_loop,
             0, 4);
+    tcase_add_loop_test(
+            tc_events, Jump_context_in_next_pattern_instance_is_found,
+            0, (int)(sizeof(jump_chunk_sizes) / sizeof(jump_chunk_sizes[0])));
     tcase_add_test(tc_events, Events_appear_in_event_buffer);
     tcase_add_test(
             tc_events,

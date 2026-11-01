@@ -638,6 +638,9 @@ static void Player_process_cgiters(Player* player, Tstamp* limit, bool skip)
     }
 
     // Find our next jump position
+    // NOTE: The search only covers the current pattern instance,
+    //       so we repeat it below whenever we move to another one
+    Pat_inst_ref next_jump_piref = player->master_params.cur_pos.piref;
     Tstamp* next_jump_row = Tstamp_set(TSTAMP_AUTO, INT64_MAX, 0);
     int next_jump_ch = KQT_CHANNELS_MAX;
     int64_t next_jump_trigger = INT64_MAX;
@@ -671,6 +674,30 @@ static void Player_process_cgiters(Player* player, Tstamp* limit, bool skip)
         // Update current position
         // FIXME: we should really have a well-defined single source of current position
         player->master_params.cur_pos = player->cgiters[0].pos;
+
+        // Find our next jump position again if we have moved to another
+        // pattern instance, otherwise we would miss Jump contexts there
+        if (player->master_params.cur_pos.piref.pat >= 0 &&
+                Pat_inst_ref_cmp(
+                    &player->master_params.cur_pos.piref, &next_jump_piref) != 0)
+        {
+            next_jump_piref = player->master_params.cur_pos.piref;
+            Tstamp_set(next_jump_row, INT64_MAX, 0);
+            next_jump_ch = KQT_CHANNELS_MAX;
+            next_jump_trigger = INT64_MAX;
+            next_jc = Active_jumps_get_next_context(
+                    player->master_params.active_jumps,
+                    &player->master_params.cur_pos.piref,
+                    &player->master_params.cur_pos.pat_pos,
+                    player->master_params.cur_ch,
+                    player->master_params.cur_trigger);
+            if (next_jc != NULL)
+            {
+                Tstamp_copy(next_jump_row, &next_jc->row);
+                next_jump_ch = next_jc->ch_num;
+                next_jump_trigger = next_jc->order;
+            }
+        }
 
         const bool is_at_global_breakpoint =
             (Tstamp_cmp(limit_offset, TSTAMP_AUTO) == 0);
@@ -715,6 +742,7 @@ static void Player_process_cgiters(Player* player, Tstamp* limit, bool skip)
                     const Event_type event_type = Trigger_get_type(trl->trigger);
 
                     const bool at_active_jump =
+                        Pat_inst_ref_cmp(&next_jump_piref, &cgiter->pos.piref) == 0 &&
                         Tstamp_cmp(next_jump_row, &cgiter->pos.pat_pos) == 0 &&
                         next_jump_ch == i &&
                         next_jump_trigger == player->master_params.cur_trigger;
@@ -890,10 +918,6 @@ static void Player_process_cgiters(Player* player, Tstamp* limit, bool skip)
             Tstamp_copy(limit, limit_offset);
             return;
         }
-
-        // TODO: Find our next Jump context
-        // TODO: On second thought, shouldn't it be handled above
-        //       where the current jump context is processed?
 
         bool any_cgiter_active = false;
 
