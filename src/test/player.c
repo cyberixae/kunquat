@@ -437,9 +437,8 @@ START_TEST(Pattern_playback_pauses_zero_length_pattern)
         const long frames_available = kqt_Handle_get_frames_available(handle);
         const float* ret_buf = kqt_Handle_get_audio(handle);
         check_unexpected_error();
-        memcpy(actual_buf + buf_offset,
-                ret_buf,
-                (size_t)frames_available * 2 * sizeof(float));
+        for (long k = 0; k < frames_available; ++k)
+            actual_buf[buf_offset + k] = ret_buf[k * 2];
 
         buf_offset += frames_available;
         frames_left -= frames_available;
@@ -448,7 +447,7 @@ START_TEST(Pattern_playback_pauses_zero_length_pattern)
     ck_assert_msg(frames_left != buf_len,
             "Pattern playback of zero-length pattern produces no audio");
 
-    float expected_buf[buf_len] = { 1.0f, 1.0f };
+    float expected_buf[buf_len] = { 1.0f };
 
     check_buffers_equal(expected_buf, actual_buf, buf_len, 0.0f);
 }
