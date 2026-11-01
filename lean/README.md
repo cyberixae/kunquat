@@ -90,6 +90,21 @@ as an active jump if the context belongs to the same pattern instance.
 `test/jump_context_crash.c` are regression tests for it; the model's
 `crashSong` example shows the expected behaviour.
 
+### `Kunquat/Seq.lean` — a sequencer for a subset of Kunquat
+
+An executable sequencer meant to produce the same event stream as the C
+player, as a first step towards comparing a Lean implementation of the
+sequencer with the C one. It covers an order list of pattern instances,
+several columns, rows on quarter-beat boundaries, note-on (passed through),
+tempo (`m.t`) and jumps (`m.jc`, `m.jp`, `m.jr`, `mj`), including the default
+jump target of the current pattern instance. Its output is the list of
+processed events with the frame at which each happens, in the format of
+`kqt_Handle_receive_events`.
+
+It is not proved correct: it is checked against the C player by
+`test/run_seq.sh` (below). Proving that its jump handling refines
+`Kunquat/Jump.lean` would connect it to the termination proof.
+
 ## Calling the Lean code from C
 
 Before the first call, C must initialize the Lean runtime and the module, and
@@ -140,6 +155,21 @@ Before the fix, this comparison found the bug on its own: on 300 random
 songs, about half of them multi-pattern, the old player aborted on 5 and
 never stopped on another.
 
+## Sequencer comparison
+
+`test/run_seq.sh <libkunquat directory>` plays random modules with the Lean
+sequencer (`SeqSim.lean`, built as `seqsim`) and with libkunquat
+(`test/seq_play.c`), using play calls of 1 to 4096 frames, and checks with
+`test/seq_diff.py` that both report the same events with the same channels
+and values in the same order, that each event's frame lies within the C play
+call that reported it, and that both play the same number of frames.
+
+The audio rate is 4800 and tempos divide 72000, so every row starts on a
+whole frame and the frames can be compared exactly without reproducing the C
+player's floating-point timing.
+
+On 1,788 random modules (about 27,000 events) the two agree completely.
+
 ## Limitations
 
 The theorems are checked by Lean, and the exported code is generated from the
@@ -151,3 +181,7 @@ inspection, backed by the differential test.
 The jump model abstracts playback to a sequence of trigger slots, so it says
 nothing about timing within a slice, pattern delays or tempo. Its link to the
 C code is by inspection plus the playback-time comparison.
+
+The sequencer covers only the subset listed above. Agreement with the C player
+shows that the two implement the same behaviour on the modules tried, not that
+either is correct.

@@ -67,7 +67,11 @@ TOO_LONG = 'too long'
 
 
 def run(cmd, song):
-    p = subprocess.run(cmd, input=song, capture_output=True, text=True, timeout=600)
+    try:
+        p = subprocess.run(cmd, input=song, capture_output=True, text=True,
+                timeout=60)
+    except subprocess.TimeoutExpired:
+        return 'error: timed out after 60 s'
     if p.returncode == 3:
         return TOO_LONG
     if p.returncode != 0:
