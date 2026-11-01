@@ -31,14 +31,15 @@
 
   So `[m.jc n] ... [mj]` jumps back `n` times, as the specification describes.
 
-  ## Difference from the C code
+  ## Context lookup
 
-  The C code looks up the next jump context once per render slice, within the
-  current pattern instance. If a slice starts at the end of one pattern
-  instance and continues into the next, an existing context there is missed
-  and `mj` tries to create a second context at the same position, which fails
-  an assertion in `AAtree_attach` (see `test/jump_context_crash.c`). The model
-  always reads the current state, so it describes the intended behaviour.
+  The model always reads the context at the current position. The C code used
+  to look up the next jump context once per render slice, within the current
+  pattern instance, so a slice that moved into another pattern instance could
+  miss an existing context there. Depending on the audio buffer size, the
+  player then aborted in `AAtree_attach` or never stopped. `Player_seq.c` now
+  repeats the lookup whenever playback enters another pattern instance (see
+  `test/jump_context_crash.c`).
 -/
 
 namespace Kunquat.Jump

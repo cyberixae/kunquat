@@ -1,9 +1,12 @@
 /*
  * Reads a song in the format used by JumpSim (see lean/JumpSim.lean), builds
- * it as a one-pattern Kunquat module, plays it with libkunquat and prints the
- * playback time in beats.
+ * it as a Kunquat module with one pattern instance per pattern length, plays
+ * it with libkunquat and prints the playback time in beats.
  *
- * Usage: jump_play <audio buffer size> < song.txt
+ * Usage: jump_play <audio buffer size> [max beats] < song.txt
+ *
+ * Exits with status 1 if playback has not stopped after max beats
+ * (default 1000000), or if the player stops producing audio without stopping.
  */
 
 #include <kunquat/Handle.h>
@@ -16,10 +19,18 @@
 
 #define RATE 48000
 #define FRAMES_PER_BEAT (RATE / 2) // default tempo 120
-#define MAX_SLOTS 256
+#define MAX_PATTERNS 16
+#define MAX_TRIGGERS 256
+#define ENTRY_SIZE 80
 
 
 static kqt_Handle handle;
+
+static int pattern_count = 0;
+static int pattern_start[MAX_PATTERNS + 1]; // start times in beats
+
+static char triggers[MAX_PATTERNS][MAX_TRIGGERS * ENTRY_SIZE];
+static int trigger_count[MAX_PATTERNS];
 
 
 static void set(const char* key, const char* data)
@@ -32,65 +43,145 @@ static void set(const char* key, const char* data)
 }
 
 
+// The pattern instance that plays at a time, and the row within it.
+static int pattern_at(int time, int* row)
+{
+    for (int p = pattern_count - 1; p >= 0; --p)
+    {
+        if (time >= pattern_start[p])
+        {
+            *row = time - pattern_start[p];
+            return p;
+        }
+    }
+    fprintf(stderr, "bad time %d\n", time);
+    exit(2);
+}
+
+
+static void add_trigger(int time, const char* event, const char* arg)
+{
+    int row = 0;
+    const int p = pattern_at(time, &row);
+    if (trigger_count[p] >= MAX_TRIGGERS)
+    {
+        fprintf(stderr, "too many triggers\n");
+        exit(2);
+    }
+
+    char entry[ENTRY_SIZE] = "";
+    snprintf(entry, sizeof(entry), "%s[[%d, 0], [\"%s\", %s]]",
+            trigger_count[p] > 0 ? ", " : "", row, event, arg);
+    strcat(triggers[p], entry);
+    ++trigger_count[p];
+}
+
+
 int main(int argc, char** argv)
 {
     const long buf_size = (argc > 1) ? atol(argv[1]) : 4096;
+    const long long max_beats = (argc > 2) ? atoll(argv[2]) : 1000000;
 
-    int len = 0;
-    if (scanf("%d", &len) != 1 || len <= 0)
-    {
-        fprintf(stderr, "bad length\n");
+    // Pattern lengths
+    char line[1024] = "";
+    if (fgets(line, sizeof(line), stdin) == NULL)
         return 2;
-    }
-
-    static char triggers[MAX_SLOTS * 64] = "[0, [";
-    int count = 0;
-    int row = 0;
-    char kind[8] = "";
-    while (scanf("%d %7s", &row, kind) == 2)
+    pattern_start[0] = 0;
+    for (char* tok = strtok(line, " \n"); tok != NULL; tok = strtok(NULL, " \n"))
     {
-        if (count >= MAX_SLOTS)
+        const int len = atoi(tok);
+        if (len <= 0 || pattern_count >= MAX_PATTERNS)
         {
-            fprintf(stderr, "too many slots\n");
+            fprintf(stderr, "bad pattern length\n");
+            return 2;
+        }
+        pattern_start[pattern_count + 1] = pattern_start[pattern_count] + len;
+        ++pattern_count;
+    }
+    if (pattern_count == 0)
+        return 2;
+
+    // Triggers
+    int time = 0;
+    char kind[8] = "";
+    while (scanf("%d %7s", &time, kind) == 2)
+    {
+        if (time < 0 || time >= pattern_start[pattern_count])
+        {
+            fprintf(stderr, "bad time %d\n", time);
             return 2;
         }
 
-        char entry[64] = "";
         int arg = 0;
+        char value[48] = "";
         if (strcmp(kind, "mj") == 0)
-            snprintf(entry, sizeof(entry), "[[%d, 0], [\"mj\", null]]", row);
+        {
+            add_trigger(time, "mj", "null");
+        }
         else if (strcmp(kind, "jc") == 0 && scanf("%d", &arg) == 1)
-            snprintf(entry, sizeof(entry), "[[%d, 0], [\"m.jc\", \"%d\"]]", row, arg);
+        {
+            snprintf(value, sizeof(value), "\"%d\"", arg);
+            add_trigger(time, "m.jc", value);
+        }
         else if (strcmp(kind, "jr") == 0 && scanf("%d", &arg) == 1)
-            snprintf(entry, sizeof(entry), "[[%d, 0], [\"m.jr\", \"ts(%d, 0)\"]]", row, arg);
+        {
+            snprintf(value, sizeof(value), "\"ts(%d, 0)\"", arg);
+            add_trigger(time, "m.jr", value);
+        }
+        else if (strcmp(kind, "jt") == 0 && scanf("%d", &arg) == 1)
+        {
+            int row = 0;
+            const int target = pattern_at(arg, &row);
+            snprintf(value, sizeof(value), "\"pat(%d, 0)\"", target);
+            add_trigger(time, "m.jp", value);
+            snprintf(value, sizeof(value), "\"ts(%d, 0)\"", row);
+            add_trigger(time, "m.jr", value);
+        }
         else
         {
-            fprintf(stderr, "bad slot\n");
+            fprintf(stderr, "bad trigger line\n");
             return 2;
         }
-
-        if (count > 0)
-            strcat(triggers, ", ");
-        strcat(triggers, entry);
-        ++count;
     }
-    strcat(triggers, "]]");
 
     handle = kqt_new_Handle();
     if (!handle)
         return 2;
 
-    char length[32] = "";
-    snprintf(length, sizeof(length), "[0, [%d, 0]]", len);
+    char order_list[MAX_PATTERNS * 32] = "[0, [";
+    for (int p = 0; p < pattern_count; ++p)
+    {
+        char entry[32] = "";
+        snprintf(entry, sizeof(entry), "%s[%d, 0]", p > 0 ? ", " : "", p);
+        strcat(order_list, entry);
+    }
+    strcat(order_list, "]]");
 
     set("album/p_manifest.json", "[0, {}]");
     set("album/p_tracks.json", "[0, [0]]");
     set("song_00/p_manifest.json", "[0, {}]");
-    set("song_00/p_order_list.json", "[0, [ [0, 0] ]]");
-    set("pat_000/p_manifest.json", "[0, {}]");
-    set("pat_000/p_length.json", length);
-    set("pat_000/instance_000/p_manifest.json", "[0, {}]");
-    set("pat_000/col_00/p_triggers.json", triggers);
+    set("song_00/p_order_list.json", order_list);
+
+    for (int p = 0; p < pattern_count; ++p)
+    {
+        char key[64] = "";
+        char data[MAX_TRIGGERS * ENTRY_SIZE + 16] = "";
+
+        snprintf(key, sizeof(key), "pat_%03d/p_manifest.json", p);
+        set(key, "[0, {}]");
+        snprintf(key, sizeof(key), "pat_%03d/p_length.json", p);
+        snprintf(data, sizeof(data), "[0, [%d, 0]]",
+                pattern_start[p + 1] - pattern_start[p]);
+        set(key, data);
+        snprintf(key, sizeof(key), "pat_%03d/instance_000/p_manifest.json", p);
+        set(key, "[0, {}]");
+        if (trigger_count[p] > 0)
+        {
+            snprintf(key, sizeof(key), "pat_%03d/col_00/p_triggers.json", p);
+            snprintf(data, sizeof(data), "[0, [%s]]", triggers[p]);
+            set(key, data);
+        }
+    }
 
     if (!kqt_Handle_validate(handle))
     {
@@ -100,12 +191,21 @@ int main(int argc, char** argv)
     kqt_Handle_set_audio_rate(handle, RATE);
     kqt_Handle_set_audio_buffer_size(handle, buf_size);
 
-    const long long max_frames = (long long)FRAMES_PER_BEAT * 1000000;
+    const long long max_frames = (long long)FRAMES_PER_BEAT * max_beats;
     long long total = 0;
+    int idle_calls = 0;
     while (!kqt_Handle_has_stopped(handle) && total < max_frames)
     {
         kqt_Handle_play(handle, buf_size);
-        total += kqt_Handle_get_frames_available(handle);
+        const long frames = kqt_Handle_get_frames_available(handle);
+        total += frames;
+        idle_calls = (frames == 0) ? idle_calls + 1 : 0;
+        if (idle_calls > 100000)
+        {
+            fprintf(stderr, "stalled: no audio and not stopped after %lld frames\n",
+                    total);
+            return 1;
+        }
     }
     if (total >= max_frames)
     {

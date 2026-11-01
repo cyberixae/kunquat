@@ -1,21 +1,22 @@
 /*
- * Regression test for a crash in the jump handling of the C player.
+ * Regression test for a crash in the jump handling of the C player, fixed in
+ * src/lib/player/Player_seq.c.
  *
  * Song: pattern instance P0 (1 beat, no triggers), then P1 (1 beat) with
  * [m.jc 1] [m.jp pat(0, 0)] [mj] on row 0. By the specification it plays
  * P0, P1, jumps back once, plays P0, P1 again and stops: 3 beats, 1.5 s at the
  * default tempo. The jump model in lean/Kunquat/Jump.lean agrees (`crashSong`).
  *
- * With some audio buffer sizes the player instead aborts:
+ * Before the fix, the player aborted with some audio buffer sizes:
  *
  *   AAtree.c: AAtree_attach: Assertion `diff != 0' failed.
  *
- * Player_process_cgiters (src/lib/player/Player_seq.c) looks up the next jump
- * context once per render slice, within the current pattern instance. When a
- * slice starts at the end of P0 and continues into P1, the context left at
- * P1 row 0 by the first jump is not found, so the mj trigger is processed
- * again and Active_jumps_add_context attaches a second context with the same
- * key. rassert is enabled in all builds, so this aborts in release builds too.
+ * Player_process_cgiters looked up the next jump context once per render
+ * slice, within the current pattern instance. When a slice started at the end
+ * of P0 and continued into P1, the context left at P1 row 0 by the first jump
+ * was not found, so the mj trigger was processed again and a second context
+ * with the same key was added. rassert is enabled in all builds, so this
+ * aborted release builds too.
  *
  * Each buffer size is played in a child process so that an abort is reported
  * instead of ending the test. Exits non-zero if any size fails.

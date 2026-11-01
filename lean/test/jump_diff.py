@@ -2,8 +2,9 @@
 """
 Differential test of the jump model against the C player.
 
-Generates random one-pattern songs made of m.jc, m.jr and mj triggers, and
-compares the playback time predicted by the Lean model (jumpsim) with the time
+Generates random songs made of m.jc, m.jp, m.jr and mj triggers, half of them
+in one pattern instance and half spread over several with jumps between them,
+and compares the playback time predicted by the Lean model (jumpsim) with the time
 measured by playing the song with libkunquat (jump_play).
 
 Usage: jump_diff.py <jumpsim> <jump_play> [song count] [seed]
@@ -18,6 +19,30 @@ MAX_BEATS = 2000  # skip songs that would take long to render
 
 
 def random_song(rng):
+    if rng.random() < 0.5:
+        return random_one_pattern_song(rng)
+    return random_multi_pattern_song(rng)
+
+
+def random_multi_pattern_song(rng):
+    lengths = [rng.randint(1, 3) for _ in range(rng.randint(2, 4))]
+    total = sum(lengths)
+    # m.jp defaults to the current pattern instance, which the model does not
+    # track, so set a jump target before anything else.
+    lines = [' '.join(map(str, lengths)), '0 jt {}'.format(rng.randrange(total))]
+    for time in range(total):
+        for _ in range(rng.choice([0, 0, 1, 1, 2])):
+            kind = rng.choice(['jc', 'jc', 'jt', 'mj', 'mj', 'mj'])
+            if kind == 'jc':
+                lines.append('{} jc {}'.format(time, rng.choice([0, 1, 1, 2, 3])))
+            elif kind == 'jt':
+                lines.append('{} jt {}'.format(time, rng.randrange(total)))
+            else:
+                lines.append('{} mj'.format(time))
+    return '\n'.join(lines) + '\n'
+
+
+def random_one_pattern_song(rng):
     length = rng.randint(2, 8)
     slots = []
     for row in range(length):
@@ -74,8 +99,9 @@ def main():
         if expected > MAX_BEATS:
             skipped += 1
             continue
-        buf_size = rng.choice(['256', '1000', '4096', '24000'])
-        actual = run([jump_play, buf_size], song)
+        buf_size = rng.choice(['256', '1000', '4000', '4096', '12000', '24000'])
+        # Allow some slack, but notice quickly if the player does not stop.
+        actual = run([jump_play, buf_size, str(2 * expected + 16)], song)
         compared += 1
         total_beats += expected
         if actual != expected:

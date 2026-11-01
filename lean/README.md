@@ -74,17 +74,21 @@ significant: each step lowers the digit of the current position and does not
 raise any later one. Re-arming a jump requires playback to come back to it
 from a later position, which uses up a jump there.
 
-#### A crash in the C player
+#### A bug in the C player, found through the model and fixed
 
-The model looks up jump contexts in the current state. The C code looks up
-the next one once per render slice, within the current pattern instance. When
-a slice starts at the end of one pattern instance and continues into the next,
-an existing jump context there is missed, `mj` runs again, and adding a second
-context with the same key fails an assertion in `AAtree_attach`. Kunquat's
-`rassert` is enabled in all builds, so the player aborts. Whether it happens
-depends on the audio buffer size. `test/jump_context_crash.c` reproduces it
-with a two-pattern song; the model's `crashSong` example shows the expected
-behaviour.
+The model looks up jump contexts in the current state. The C code used to look
+up the next one once per render slice, within the current pattern instance.
+When a slice moved into another pattern instance, an existing jump context
+there was missed. Depending on the audio buffer size, `mj` then ran again and
+adding a second context with the same key failed an assertion in
+`AAtree_attach` (Kunquat's `rassert` is enabled in all builds, so the player
+aborted), or playback never stopped. `Player_seq.c` now repeats the lookup
+whenever playback enters another pattern instance, and only treats a trigger
+as an active jump if the context belongs to the same pattern instance.
+
+`src/test/player.c` (`Jump_context_in_next_pattern_instance_is_found`) and
+`test/jump_context_crash.c` are regression tests for it; the model's
+`crashSong` example shows the expected behaviour.
 
 ## Calling the Lean code from C
 
@@ -125,15 +129,16 @@ never frees them by design.
 ## Jump tests
 
 `test/run_jump.sh <libkunquat directory>` compares the jump model with the C
-player: `test/jump_diff.py` generates random one-pattern songs of `m.jc`,
-`m.jr` and `mj` triggers, and checks that the playback time predicted by the
-model (`JumpSim.lean`, built as `jumpsim`) equals the time the C player plays
-(`test/jump_play.c`), with several buffer sizes. It also runs the crash
-reproduction above, which is reported but does not fail the script while the
-bug is unfixed.
+player: `test/jump_diff.py` generates random songs of `m.jc`, `m.jp`, `m.jr`
+and `mj` triggers, half of them in one pattern instance and half over several
+pattern instances with jumps between them, and checks that the playback time
+predicted by the model (`JumpSim.lean`, built as `jumpsim`) equals the time
+the C player plays (`test/jump_play.c`), with buffer sizes that used to crash.
+It then runs the crash regression test.
 
-The random songs stay within one pattern instance, where the C lookup is
-correct, so they test the jump semantics rather than the crash.
+Before the fix, this comparison found the bug on its own: on 300 random
+songs, about half of them multi-pattern, the old player aborted on 5 and
+never stopped on another.
 
 ## Limitations
 
