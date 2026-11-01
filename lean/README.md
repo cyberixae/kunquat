@@ -169,6 +169,9 @@ whole frame and the frames can be compared exactly without reproducing the C
 player's floating-point timing.
 
 On 1,788 random modules (about 27,000 events) the two agree completely.
+Run against libkunquat before the jump fix, the same comparison flags 6 of
+397 modules: the old player hangs on 4, reports different events on one and
+aborts on an assertion in `Event_buffer_start_skipping` on another.
 
 ## Limitations
 
