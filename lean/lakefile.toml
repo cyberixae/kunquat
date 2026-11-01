@@ -3,3 +3,7 @@ defaultTargets = ["Kunquat"]
 
 [[lean_lib]]
 name = "Kunquat"
+
+[[lean_exe]]
+name = "jumpsim"
+root = "JumpSim"
