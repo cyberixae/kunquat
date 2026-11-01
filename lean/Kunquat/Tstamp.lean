@@ -10,24 +10,28 @@
 
 namespace Kunquat
 
+-- The model exists only to state and prove properties. Its definitions are
+-- marked `noncomputable` so that none of it is compiled into the library
+-- linked into C.
+
 /-- `KQT_TSTAMP_BEAT` from `include/kunquat/limits.h`. -/
-def BEAT : Int := 882161280
+noncomputable def BEAT : Int := 882161280
 
 structure Tstamp where
   beats : Int
   rem   : Int
-  deriving DecidableEq, Repr
+  deriving DecidableEq
 
 namespace Tstamp
 
 /-- The condition checked by `Tstamp_validate` (and by `Tstamp_set`). -/
-def Valid (ts : Tstamp) : Prop := 0 ≤ ts.rem ∧ ts.rem < BEAT
+noncomputable def Valid (ts : Tstamp) : Prop := 0 ≤ ts.rem ∧ ts.rem < BEAT
 
 /-- The exact time a timestamp denotes, in units of 1 / BEAT beats. -/
-def value (ts : Tstamp) : Int := ts.beats * BEAT + ts.rem
+noncomputable def value (ts : Tstamp) : Int := ts.beats * BEAT + ts.rem
 
 /-- `Tstamp_add` -/
-def add (ts1 ts2 : Tstamp) : Tstamp :=
+noncomputable def add (ts1 ts2 : Tstamp) : Tstamp :=
   let beats := ts1.beats + ts2.beats
   let rem   := ts1.rem + ts2.rem
   if rem ≥ BEAT then ⟨beats + 1, rem - BEAT⟩
@@ -35,7 +39,7 @@ def add (ts1 ts2 : Tstamp) : Tstamp :=
   else ⟨beats, rem⟩
 
 /-- `Tstamp_sub` -/
-def sub (ts1 ts2 : Tstamp) : Tstamp :=
+noncomputable def sub (ts1 ts2 : Tstamp) : Tstamp :=
   let beats := ts1.beats - ts2.beats
   let rem   := ts1.rem - ts2.rem
   if rem < 0 then ⟨beats - 1, rem + BEAT⟩
@@ -43,7 +47,7 @@ def sub (ts1 ts2 : Tstamp) : Tstamp :=
   else ⟨beats, rem⟩
 
 /-- `Tstamp_cmp` -/
-def cmp (ts1 ts2 : Tstamp) : Int :=
+noncomputable def cmp (ts1 ts2 : Tstamp) : Int :=
   if ts1.beats < ts2.beats then -1
   else if ts1.beats > ts2.beats then 1
   else if ts1.rem < ts2.rem then -1
@@ -51,7 +55,7 @@ def cmp (ts1 ts2 : Tstamp) : Int :=
   else 0
 
 /-- `Tstamp_min` -/
-def min (ts1 ts2 : Tstamp) : Tstamp :=
+noncomputable def min (ts1 ts2 : Tstamp) : Tstamp :=
   if cmp ts1 ts2 < 0 then ts1 else ts2
 
 /-! ## The assertions in `Tstamp.c` never fail -/
@@ -158,8 +162,8 @@ theorem sub_add_cancel {a b : Tstamp} (ha : a.Valid) (hb : b.Valid) :
   `ts1->rem - ts2->rem` are computed in `int32_t` before normalisation, so the
   C code is only correct if they cannot overflow. They can't: -/
 
-def INT32_MIN : Int := -2147483648
-def INT32_MAX : Int := 2147483647
+noncomputable def INT32_MIN : Int := -2147483648
+noncomputable def INT32_MAX : Int := 2147483647
 
 theorem add_rem_no_int32_overflow {a b : Tstamp} (ha : a.Valid) (hb : b.Valid) :
     INT32_MIN ≤ a.rem + b.rem ∧ a.rem + b.rem ≤ INT32_MAX := by
@@ -173,8 +177,8 @@ theorem sub_rem_no_int32_overflow {a b : Tstamp} (ha : a.Valid) (hb : b.Valid) :
   The carry is at most one beat, so overflow happens exactly when the true
   result falls outside the `int64_t` range. Callers must rule that out. -/
 
-def INT64_MIN : Int := -9223372036854775808
-def INT64_MAX : Int := 9223372036854775807
+noncomputable def INT64_MIN : Int := -9223372036854775808
+noncomputable def INT64_MAX : Int := 9223372036854775807
 
 theorem add_beats_carry {a b : Tstamp} (ha : a.Valid) (hb : b.Valid) :
     (add a b).beats = a.beats + b.beats ∨ (add a b).beats = a.beats + b.beats + 1 := by

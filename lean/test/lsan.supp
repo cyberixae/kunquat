@@ -1,0 +1,5 @@
+# Lean's standard library (Init) allocates a few big-integer constants with
+# GMP when it is initialized and, by design, never frees them. A program that
+# only initializes Init and does nothing else reports the same leak (128 bytes
+# in 12 allocations with Lean 4.35.0).
+leak:__gmp_default_allocate
